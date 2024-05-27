@@ -18,7 +18,7 @@ struct MarkupNSAttributedStringVisitor: MarkupVisitor {
     static let breakLineSymbol = "\n"
     
     let newLine: NSMutableAttributedString = {
-        let newline = NSMutableAttributedString("\n")
+        let newline = NSMutableAttributedString(string: "\n")
         newline.setAttributes([.font: UIFont.systemFont(ofSize: 4)], range: .init(location: 0, length: newline.length))
         return newline
     }()
