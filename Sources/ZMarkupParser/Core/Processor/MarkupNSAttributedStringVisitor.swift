@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 
 struct MarkupNSAttributedStringVisitor: MarkupVisitor {
     
@@ -16,6 +17,13 @@ struct MarkupNSAttributedStringVisitor: MarkupVisitor {
     
     static let breakLineSymbol = "\n"
     
+    let newLine: NSMutableAttributedString = {
+        let newline = NSMutableAttributedString("\n")
+        newline.setAttributes([.font: UIFont.systemFont(ofSize: 4)], range: .init(location: 0, length: newline.length))
+        return newline
+    }()
+
+    
     func visit(_ markup: RootMarkup) -> Result {
         return reduceBreaklineInResultNSAttributedString(collectAttributedString(markup))
     }
@@ -25,6 +33,7 @@ struct MarkupNSAttributedStringVisitor: MarkupVisitor {
     }
     
     func visit(_ markup: RawStringMarkup) -> Result {
+        if let _ = markup.parentMarkup as? ListMarkup { return NSAttributedString() }
         return applyMarkupStyle(markup.attributedString, with: collectMarkupStyle(markup))
     }
     
@@ -76,19 +85,22 @@ struct MarkupNSAttributedStringVisitor: MarkupVisitor {
             }
             parentMarkup = parentMarkup?.parentMarkup
         }
-        let indent = String(repeating: " ", count: level)
+        let indent = String(repeating: " ", count: level-1)
         
         if let parentMarkup = markup.parentMarkup as? ListMarkup {
             let thisAttributedString: NSMutableAttributedString
             if parentMarkup.styleList.type.isOrder() {
                 let siblingListItems = markup.parentMarkup?.childMarkups.filter({ $0 is ListItemMarkup }) ?? []
                 let position = (siblingListItems.firstIndex(where: { $0 === markup }) ?? 0) + parentMarkup.styleList.startingItemNumber
-                thisAttributedString = NSMutableAttributedString(attributedString: makeString(in: markup, string:indent+parentMarkup.styleList.marker(forItemNumber: position)))
+                thisAttributedString = NSMutableAttributedString(attributedString: makeString(in: markup, string:indent+parentMarkup.styleList.marker(forItemNumber: position)+"\t"))
             } else {
-                thisAttributedString = NSMutableAttributedString(attributedString: makeString(in: markup, string:indent+parentMarkup.styleList.marker(forItemNumber: parentMarkup.styleList.startingItemNumber)))
+                thisAttributedString = NSMutableAttributedString(attributedString: makeString(in: markup, string:indent+parentMarkup.styleList.marker(forItemNumber: parentMarkup.styleList.startingItemNumber)+"\t"))
             }
+            
+
             attributedString.insert(thisAttributedString, at: 0)
             attributedString.markSuffixTagBoundaryBreakline()
+            attributedString.append(newLine)
         }
         
         return attributedString
@@ -97,8 +109,25 @@ struct MarkupNSAttributedStringVisitor: MarkupVisitor {
     func visit(_ markup: ListMarkup) -> Result {
         let attributedString = collectAttributedString(markup)
         let thisAttributedString = NSMutableAttributedString(attributedString: attributedString)
+        // insert raw newline to pass over merging breaklinePlaceholders
+        thisAttributedString.insert(NSAttributedString(string: "\n"), at: 0)
         thisAttributedString.markPrefixTagBoundaryBreakline()
         thisAttributedString.markSuffixTagBoundaryBreakline()
+        
+        let inset = 16.0
+        
+        let ps = NSMutableParagraphStyle()
+        ps.paragraphSpacingBefore = 0
+        ps.headIndent = inset
+        ps.alignment = .left
+        ps.paragraphSpacing = 0
+        ps.lineHeightMultiple = 1
+        ps.defaultTabInterval = 1
+        ps.tabStops = [.init(textAlignment: .left, location: inset)]
+
+        let attrs: [NSAttributedString.Key: Any] = [.paragraphStyle: ps]
+
+        thisAttributedString.addAttributes(attrs, range: NSRange(location: 0, length: thisAttributedString.length))
         
         return thisAttributedString
     }
